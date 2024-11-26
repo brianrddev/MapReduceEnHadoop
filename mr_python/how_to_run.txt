@@ -1,0 +1,19 @@
+#Dentro de la carpeta mr_python
+docker build -t hadoop-python .
+
+docker load -i .\hadoop-python-mapreduce.tar
+
+docker run -it --name hadoop-python -v ${PWD}/data:/data -v ${PWD}/outputs:/outputs -v ${PWD}/scripts:/scripts hadoop-python
+
+#Una vez dentro de la maquina hadoop.
+$HADOOP_HOME/sbin/start-dfs.sh
+$HADOOP_HOME/sbin/start-yarn.sh
+
+hadoop fs -mkdir -p /user/data
+hadoop fs -put /data/copenhagen.csv /user/data/
+
+chmod +x /scripts/ejecutar_hadoop.sh
+
+./scripts/ejecutar_hadoop
+
+#El resultaod estara en la carpeta outputs en tu maquina local
