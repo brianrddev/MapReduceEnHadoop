@@ -1,7 +1,6 @@
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
@@ -13,87 +12,56 @@ import java.io.IOException;
 
 public class TemperatureClassification {
 
-    public static class TemperatureMapper extends Mapper<LongWritable, Text, Text, IntWritable> {
-        private static final int HOT_THRESHOLD = 20;
-        private static final int COLD_THRESHOLD = 5;
+    // Mapper Class
+    public static class TemperatureMapper extends Mapper<Object, Text, Text, IntWritable> {
+        private static final IntWritable one = new IntWritable(1);
+        private Text category = new Text();
 
-        public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
-            // Log input value for debugging
-            System.out.println("Processing line: " + value.toString());
-
-            String[] fields = value.toString().split(",");
-
-            // Log field count
-            System.out.println("Number of fields: " + fields.length);
-
-            // Mejorado el manejo de datos y validación
-            if (fields.length < 2) {
-                System.out.println("Skipping line: insufficient fields");
-                return;
-            }
-
-            if (fields[1].equals("temp") || fields[1].trim().isEmpty()) {
-                System.out.println("Skipping header or empty temperature field");
-                return;
-            }
-
-            try {
-                // Limpieza de datos mejorada
-                String tempStr = fields[1].trim().replace("\"", "");
-                float temperatureFloat = Float.parseFloat(tempStr);
-                int temperature = Math.round(temperatureFloat);
-
-                System.out.println("Parsed temperature: " + temperature);
-
-                String classification;
-                if (temperature > HOT_THRESHOLD) {
-                    classification = "Caluroso";
-                } else if (temperature < COLD_THRESHOLD) {
-                    classification = "Frío";
-                } else {
-                    System.out.println("Temperature " + temperature + " is in moderate range, skipping");
-                    return;
+        @Override
+        public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+            String line = value.toString();
+            String[] fields = line.split(",");
+            if (fields.length >= 3) {
+                try {
+                    double temperature = Double.parseDouble(fields[2]);
+                    if (temperature > 20.0) {
+                        category.set("hot");
+                    } else if (temperature < 5.0) {
+                        category.set("cold");
+                    } else {
+                        category.set("neutral");
+                    }
+                    context.write(category, one);
+                } catch (NumberFormatException e) {
+                    // Ignorar líneas con errores
                 }
-
-                System.out.println("Emitting: " + classification + " -> 1");
-                context.write(new Text(classification), new IntWritable(1));
-
-            } catch (NumberFormatException e) {
-                System.err.println("Error parsing temperature from value: " + fields[1]);
-                System.err.println("Error details: " + e.getMessage());
             }
         }
     }
 
+    // Reducer Class
     public static class TemperatureReducer extends Reducer<Text, IntWritable, Text, IntWritable> {
-        public void reduce(Text key, Iterable<IntWritable> values, Context context)
-                throws IOException, InterruptedException {
+        private IntWritable result = new IntWritable();
+
+        @Override
+        public void reduce(Text key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
             int sum = 0;
-            int count = 0;
-
-            for (IntWritable value : values) {
-                sum += value.get();
-                count++;
+            for (IntWritable val : values) {
+                sum += val.get();
             }
-
-            System.out.println("Reducing for key: " + key.toString() +
-                             ", processed " + count + " values, sum = " + sum);
-
-            context.write(key, new IntWritable(sum));
+            result.set(sum);
+            context.write(key, result);
         }
     }
 
+    // Driver Code
     public static void main(String[] args) throws Exception {
-        if (args.length != 2) {
-            System.err.println("Usage: TemperatureClassification <input path> <output path>");
-            System.exit(-1);
-        }
-
         Configuration conf = new Configuration();
-        Job job = Job.getInstance(conf, "Temperature Classification");
+        Job job = Job.getInstance(conf, "temperature classification");
 
         job.setJarByClass(TemperatureClassification.class);
         job.setMapperClass(TemperatureMapper.class);
+        job.setCombinerClass(TemperatureReducer.class);
         job.setReducerClass(TemperatureReducer.class);
 
         job.setOutputKeyClass(Text.class);
@@ -102,10 +70,6 @@ public class TemperatureClassification {
         FileInputFormat.addInputPath(job, new Path(args[0]));
         FileOutputFormat.setOutputPath(job, new Path(args[1]));
 
-        System.out.println("Input path: " + args[0]);
-        System.out.println("Output path: " + args[1]);
-
-        boolean success = job.waitForCompletion(true);
-        System.exit(success ? 0 : 1);
+        System.exit(job.waitForCompletion(true) ? 0 : 1);
     }
 }
