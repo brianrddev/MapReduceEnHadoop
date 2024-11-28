@@ -1,0 +1,23 @@
+# 1. Construir la imagen Docker con el nombre "hadoop-java-mapreduce"
+docker build -t hadoop-java-mapreduce .
+
+# 2. Ejecutar un contenedor interactivo con el nombre "hadoop-java", montando el directorio local "data" en el contenedor en "/data"
+docker run -it --name hadoop-java -v "$(pwd)/data:/data" hadoop-java-mapreduce
+
+# 3. Compilar el archivo Java "TemperatureClassification.java", utilizando el classpath de Hadoop para incluir sus librerías
+javac -cp $(hadoop classpath) TemperatureClassification.java
+
+# 4. Crear un archivo JAR llamado "TemperatureClassification.jar" que incluye todas las clases compiladas
+jar cf TemperatureClassification.jar TemperatureClassification*.class
+
+# 5. Listar el archivo JAR para confirmar que se creó correctamente
+ls TemperatureClassification.jar
+
+# 6. Ejecutar el job de MapReduce utilizando el archivo JAR, especificando el archivo de entrada y el directorio de salida en HDFS
+hadoop jar TemperatureClassification.jar TemperatureClassification /user/data/copenhagen.csv /user/data/output
+
+# 7. Verificar la salida generada en el directorio de HDFS especificado
+hadoop fs -ls /user/data/output
+
+# 8. Verificar el contenido del archivo de salida principal en HDFS
+hadoop fs -cat /user/data/output/part-r-00000
